@@ -2,6 +2,77 @@ from flask import Flask, jsonify, render_template, request
 from flask_sqlalchemy import SQLAlchemy
 import random
 
+from bs4 import BeautifulSoup
+import requests
+import time
+
+def getAmazonPrices(item):
+
+    # Follow the template, words separated by spaces joined by +
+    item_word = '+'.join(item.split(' '))
+
+    search_link = ""
+
+    mode = 0
+    # TODO: Currently cannot work if user sorts by low to high etc...
+    # TODO: I think is cause is a JS Script so a bit hard
+    # TODO: I think if really cannot, we can sort it based on the results based on relevance, then sort asc / desc
+    # Update search link depending on the type that the user wants
+    if mode == 0:
+        search_link = f"https://www.amazon.sg/s?k={item_word}&crid=2J3NF4V3FF6EZ&" \
+                      f"sprefix=water+bott%2Caps%2C310&ref=nb_sb_noss_2"
+    elif mode == 1:
+        search_link = f"https://www.amazon.sg/s?k={item_word}&s=price-asc-rank&crid=2J3NF4V3FF6EZ&" \
+                      f"qid=1653582277&sprefix=water+bott%2Caps%2C310&ref=sr_st_price-asc-rank"
+    elif mode == 2:
+        search_link = f"https://www.amazon.sg/s?k={item_word}&s=price-desc-rank&crid=2J3NF4V3FF6EZ&qid" \
+                      f"=1653582324&sprefix=water+bott%2Caps%2C310&ref=sr_st_price-desc-rank"
+
+    # Send request to get the data
+    item_data = requests.get(search_link)
+    item_website = item_data.text
+
+    soup = BeautifulSoup(item_website, "html.parser")
+
+    # Some elements found with a-section may not be those with the items
+    # So we need to do filtering when looping through (checking if == None)
+    items = soup.find_all(name="div", class_="a-section")
+
+    # For some reason there are duplicates (2 of each)
+    # So I filter and put them into the final_objects
+    item_objects = []
+    final_objects = []
+
+    for item in items:
+        name = item.find("span", class_="a-text-normal")
+        if name == None:
+            continue
+        name = name.get_text()
+        price = item.find("span", class_="a-offscreen")
+        if price == None:
+            continue
+        price = price.get_text()
+        link = item.find("a", class_="a-link-normal", href=True)
+        url = f"https://amazon.sg/{link['href']}"
+
+        # Create an object with the necessary data that we need
+        new_item = {
+            'name': name,
+            'price': price,
+            'url': url
+        }
+        item_objects.append(new_item)
+
+    for i in range(len(item_objects)):
+        if i % 2 == 0:
+            final_objects.append(item_objects[i])
+
+    # The objects that we need
+    for i in range(len(final_objects)):
+        print(final_objects[i])
+
+
+
 app = Flask(__name__)
 
 ##CREATE DB
@@ -37,6 +108,12 @@ def home():
 def get_random_cafe():
     cafes = db.session.query(Cafe).all()
     random_cafe = random.choice(cafes)
+    # item = getAmazonPrices("water bottle")
+    # time.sleep(5)
+    # print(item)
+    #
+    # return item
+    print(f"hello, {jsonify(cafe=random_cafe.to_dict())}")
     return jsonify(cafe=random_cafe.to_dict())
 
 
